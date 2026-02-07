@@ -2,171 +2,209 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8">
-<title>ระบบเช็กชื่อ QR</title>
+<title>ระบบเช็กชื่อ QR โรงเรียน</title>
+
 <script src="https://unpkg.com/html5-qrcode"></script>
+
 <style>
-  body { font-family: sans-serif }
-  .msg { margin-top:10px;color:green }
-  .err { color:red }
+body{font-family:sans-serif;background:#f5f5f5;padding:20px}
+h2,h3{margin-top:0}
+.box{background:#fff;padding:15px;margin-bottom:20px;border-radius:8px}
+input,select,button{margin:5px 0;padding:8px;width:100%}
+button{cursor:pointer}
+.msg{color:green}
+.err{color:red}
+pre{background:#eee;padding:10px}
 </style>
 </head>
 <body>
 
-<h2>ระบบเช็กชื่อเข้าเรียน</h2>
+<h2>ระบบเช็กชื่อเข้าเรียนด้วย QR</h2>
 
-<!-- ===== Login ===== -->
-<div id="login">
+<!-- ================= LOGIN ================= -->
+<div id="login" class="box">
+  <h3>เข้าสู่ระบบ</h3>
   <select id="role">
     <option value="student">นักเรียน</option>
     <option value="teacher">ครู</option>
     <option value="admin">หลังบ้าน</option>
-  </select><br><br>
-
-  <input id="loginCode" placeholder="รหัสเข้าใช้งาน"><br><br>
+  </select>
+  <input id="loginCode" placeholder="รหัสเข้าใช้งาน">
   <button onclick="login()">เข้าใช้งาน</button>
   <div id="loginMsg"></div>
 </div>
 
+<!-- ================= ADMIN ================= -->
+<div id="admin" class="box" style="display:none">
+<h3>ระบบหลังบ้าน</h3>
+
+<h4>เพิ่มข้อมูล</h4>
+<select id="addType">
+  <option value="students">นักเรียน</option>
+  <option value="teachers">ครู</option>
+  <option value="subjects">วิชา</option>
+</select>
+
+<input id="name" placeholder="ชื่อ">
+<input id="code" placeholder="รหัส (นักเรียน/ครู)">
+<input id="class" placeholder="ชั้น (เฉพาะนักเรียน)">
+<input id="room" placeholder="ห้อง (เฉพาะนักเรียน)">
+
+<button onclick="addData()">เพิ่มข้อมูล</button>
+<div id="adminMsg"></div>
+
 <hr>
 
-<!-- ===== Admin ===== -->
-<div id="admin" style="display:none">
-  <h3>ระบบหลังบ้าน</h3>
-
-  <h4>เพิ่มข้อมูล</h4>
-  <select id="addType">
-    <option value="students">นักเรียน</option>
-    <option value="teachers">ครู</option>
-    <option value="subjects">วิชา</option>
-  </select><br><br>
-
-  <input id="name" placeholder="ชื่อ"><br>
-  <input id="code" placeholder="รหัส (นักเรียน/ครู)"><br>
-  <input id="class" placeholder="ชั้น (เฉพาะนักเรียน)"><br>
-  <input id="room" placeholder="ห้อง (เฉพาะนักเรียน)"><br><br>
-
-  <button onclick="addData()">เพิ่มข้อมูล</button>
-  <div id="adminMsg"></div>
+<h4>ควบคุมระบบ</h4>
+<button onclick="setSystem(true)">เปิดระบบ</button>
+<button onclick="setSystem(false)">ปิดระบบ</button>
 </div>
 
-<!-- ===== Teacher ===== -->
-<div id="teacher" style="display:none">
-  <h3>ระบบครู</h3>
+<!-- ================= TEACHER ================= -->
+<div id="teacher" class="box" style="display:none">
+<h3>ระบบครู</h3>
 
-  <input id="teacherCode" placeholder="รหัสครู"><br><br>
+<input id="teacherCode" placeholder="รหัสครู">
 
-  <select id="subject">
-    <option value="math">คณิตศาสตร์</option>
-    <option value="thai">ภาษาไทย</option>
-  </select><br><br>
+<select id="subject">
+  <option value="math">คณิตศาสตร์</option>
+  <option value="thai">ภาษาไทย</option>
+</select>
 
-  <button onclick="createQR('มา')">สร้าง QR เช็กชื่อ</button>
-  <button onclick="openLate()">เปิดสาย</button>
+<button onclick="createQR('มา')">สร้าง QR (มา)</button>
+<button onclick="openLate()">เปิดสาย</button>
+<button onclick="createQR('สาย')">สร้าง QR (สาย)</button>
 
-  <pre id="qrResult"></pre>
-  <div id="teacherMsg"></div>
+<pre id="qrResult"></pre>
+<div id="teacherMsg"></div>
 </div>
 
-<!-- ===== Student ===== -->
-<div id="student" style="display:none">
-  <h3>นักเรียนเช็กชื่อ</h3>
+<!-- ================= STUDENT ================= -->
+<div id="student" class="box" style="display:none">
+<h3>นักเรียนเช็กชื่อ</h3>
 
-  <input id="studentCode" placeholder="เลขประจำตัวนักเรียน"><br><br>
-  <div id="reader" style="width:300px"></div>
-  <div id="studentMsg"></div>
+<input id="studentCode" placeholder="เลขประจำตัวนักเรียน">
+<div id="reader" style="width:300px"></div>
+<div id="studentMsg"></div>
 </div>
 
+<!-- ================= SCRIPT ================= -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import {
-  getFirestore, collection, addDoc, getDocs, query, where
+  getFirestore, collection, addDoc, query, where, getDocs, doc, setDoc
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-const app = initializeApp({
+/* ===== Firebase ===== */
+const firebaseConfig = {
   apiKey: "AIzaSyD19ffZKxxXfWj9sseK66LCCVEWqGNqPPI",
   authDomain: "appsk-7f523.firebaseapp.com",
   projectId: "appsk-7f523"
-});
+};
+
+const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 let allowLate = false;
+let qrScanner;
+
+/* ===== UI ===== */
+function show(id){
+  ["login","admin","teacher","student"].forEach(d=>{
+    document.getElementById(d).style.display="none";
+  });
+  document.getElementById(id).style.display="block";
+}
 
 /* ===== Login ===== */
 window.login = async () => {
   const role = roleSelect.value;
   const code = loginCode.value;
 
-  if (role === "admin" && code === "1669") {
-    show("admin"); loginMsg.innerText="เข้าแอดมินแล้ว";
+  if(role==="admin"){
+    if(code==="1669"){
+      show("admin");
+      loginMsg.innerHTML="<span class='msg'>เข้าแอดมินแล้ว</span>";
+    }else loginMsg.innerHTML="<span class='err'>รหัสผิด</span>";
   }
-  else if (role === "teacher") {
-    const q = query(collection(db,"teachers"), where("code","==",code));
-    if (!(await getDocs(q)).empty) {
-      show("teacher"); loginMsg.innerText="เข้าระบบครูแล้ว";
-    } else loginMsg.innerText="รหัสครูไม่ถูกต้อง";
+
+  if(role==="teacher"){
+    const q = query(collection(db,"teachers"),where("code","==",code));
+    const snap = await getDocs(q);
+    if(!snap.empty){
+      teacherCode.value=code;
+      show("teacher");
+      loginMsg.innerHTML="<span class='msg'>เข้าระบบครูแล้ว</span>";
+    }else loginMsg.innerHTML="<span class='err'>ไม่พบครู</span>";
   }
-  else if (role === "student") {
-    const q = query(collection(db,"students"), where("code","==",code));
-    if (!(await getDocs(q)).empty) {
-      show("student"); startScan(); loginMsg.innerText="เข้าระบบนักเรียนแล้ว";
-    } else loginMsg.innerText="ไม่พบนักเรียน";
+
+  if(role==="student"){
+    const q = query(collection(db,"students"),where("code","==",code));
+    const snap = await getDocs(q);
+    if(!snap.empty){
+      studentCode.value=code;
+      show("student");
+      startScan();
+      loginMsg.innerHTML="<span class='msg'>เข้าระบบนักเรียนแล้ว</span>";
+    }else loginMsg.innerHTML="<span class='err'>ไม่พบนักเรียน</span>";
   }
 };
-
-/* ===== UI ===== */
-const roleSelect = document.getElementById("role");
-function show(id){
-  ["login","admin","teacher","student"].forEach(d=>document.getElementById(d).style.display="none");
-  document.getElementById(id).style.display="block";
-}
 
 /* ===== Admin ===== */
 window.addData = async () => {
-  await addDoc(collection(db, addType.value), {
-    name: name.value,
-    code: code.value,
-    class: class.value,
-    room: room.value
+  await addDoc(collection(db,addType.value),{
+    name:name.value,
+    code:code.value,
+    class:class.value,
+    room:room.value
   });
-  adminMsg.innerText = "เพิ่มข้อมูลเรียบร้อย ✔";
+  adminMsg.innerHTML="<span class='msg'>เพิ่มข้อมูลเรียบร้อย</span>";
+};
+
+window.setSystem = async (state)=>{
+  await setDoc(doc(db,"config","system"),{active:state});
+  adminMsg.innerHTML="<span class='msg'>ตั้งค่าระบบแล้ว</span>";
 };
 
 /* ===== Teacher ===== */
-window.createQR = async (status) => {
+window.createQR = async (status)=>{
   if(status==="สาย" && !allowLate){
-    teacherMsg.innerText="ยังไม่ได้เปิดสาย";
+    teacherMsg.innerHTML="<span class='err'>ยังไม่เปิดสาย</span>";
     return;
   }
-  const ref = await addDoc(collection(db,"qr_sessions"), {
-    status,
-    expire: Date.now()+300000
+  const ref = await addDoc(collection(db,"qr_sessions"),{
+    teacher:teacherCode.value,
+    subject:subject.value,
+    status:status,
+    expire:Date.now()+300000
   });
-  qrResult.innerText = "SESSION ID:\n"+ref.id;
-  teacherMsg.innerText="สร้าง QR แล้ว ✔";
+  qrResult.innerText="QR SESSION ID:\n"+ref.id;
+  teacherMsg.innerHTML="<span class='msg'>สร้าง QR แล้ว</span>";
 };
 
-window.openLate = () => {
+window.openLate=()=>{
   allowLate=true;
-  teacherMsg.innerText="เปิดระบบสายแล้ว";
+  teacherMsg.innerHTML="<span class='msg'>เปิดระบบสายแล้ว</span>";
 };
 
 /* ===== Student ===== */
-let qr;
 function startScan(){
-  qr = new Html5Qrcode("reader");
-  qr.start({facingMode:"environment"},{fps:10,qrbox:250},
+  qrScanner=new Html5Qrcode("reader");
+  qrScanner.start(
+    {facingMode:"environment"},
+    {fps:10,qrbox:250},
     async(id)=>{
       await addDoc(collection(db,"attendance"),{
-        student: studentCode.value,
-        session: id,
-        time: new Date()
+        student:studentCode.value,
+        session:id,
+        time:new Date()
       });
-      studentMsg.innerText="เช็กชื่อสำเร็จ ✔";
-      qr.stop();
+      studentMsg.innerHTML="<span class='msg'>เช็กชื่อสำเร็จ</span>";
+      qrScanner.stop();
     }
   );
 }
-</script>
 
+</script>
 </body>
 </html>
