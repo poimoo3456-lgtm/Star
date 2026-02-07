@@ -7,142 +7,217 @@
 </head>
 <body>
 
-<h2>ระบบเช็กชื่อด้วย QR</h2>
+<h2>ระบบเช็กชื่อ</h2>
 
-<button onclick="show('teacher')">👨‍🏫 ครู</button>
+<button onclick="showLogin('admin')">🛠 Admin</button>
+<button onclick="showLogin('teacher')">👨‍🏫 ครู</button>
 <button onclick="show('student')">👩‍🎓 นักเรียน</button>
-<button onclick="show('admin')">🛠 Admin</button>
 
 <hr>
 
-<!-- ================= ครู ================= -->
-<div id="teacher" style="display:none">
-  <h3>ระบบครู</h3>
-
-  <select id="subject">
-    <option value="math">คณิตศาสตร์</option>
-    <option value="thai">ภาษาไทย</option>
-  </select><br><br>
-
-  <button onclick="createQR('มา')">สร้าง QR เช็กชื่อ</button>
-  <button onclick="createQR('สาย')">เปิดสาย</button>
-
-  <pre id="qrResult"></pre>
+<!-- ========== LOGIN ========== -->
+<div id="login" style="display:none">
+<h3 id="loginTitle"></h3>
+<input id="loginUser" placeholder="ชื่อครู (เฉพาะครู)">
+<input id="loginPass" placeholder="รหัสผ่าน" type="password">
+<button onclick="login()">เข้าสู่ระบบ</button>
+<p id="loginMsg"></p>
 </div>
 
-<!-- ================= นักเรียน ================= -->
-<div id="student" style="display:none">
-  <h3>นักเรียนเช็กชื่อ</h3>
-
-  <input id="studentId" placeholder="รหัสนักเรียน"><br><br>
-
-  <div id="reader" style="width:300px"></div>
-  <p id="studentResult"></p>
-</div>
-
-<!-- ================= Admin ================= -->
+<!-- ========== ADMIN ========== -->
 <div id="admin" style="display:none">
-  <h3>ระบบหลังบ้าน</h3>
-  <button onclick="openSystem()">เปิดระบบ</button>
-  <button onclick="closeSystem()">ปิดระบบ</button>
+<h3>ระบบหลังบ้าน</h3>
+
+<h4>เปลี่ยนรหัส Admin</h4>
+<input id="newAdminPass" placeholder="รหัสใหม่">
+<button onclick="changeAdminPass()">เปลี่ยน</button>
+
+<h4>เพิ่มครู</h4>
+<input id="teacherName" placeholder="ชื่อครู">
+<input id="teacherPass" placeholder="รหัสครู">
+<button onclick="addTeacher()">เพิ่มครู</button>
+
+<h4>เพิ่มวิชา</h4>
+<input id="subjectName" placeholder="ชื่อวิชา">
+<button onclick="addSubject()">เพิ่มวิชา</button>
+
+<button onclick="openSystem()">เปิดระบบ</button>
+<button onclick="closeSystem()">ปิดระบบ</button>
+
+<p id="adminMsg"></p>
 </div>
 
-<!-- ================= Firebase + Logic ================= -->
+<!-- ========== TEACHER ========== -->
+<div id="teacher" style="display:none">
+<h3>ระบบครู</h3>
+
+<select id="subjectSelect"></select><br><br>
+
+<button onclick="createQR('มา')">สร้าง QR</button>
+<button onclick="createQR('สาย')">เปิดสาย</button>
+
+<pre id="qrResult"></pre>
+
+<h4>รายงานเข้าเรียน</h4>
+<button onclick="loadReport()">โหลดรายงาน</button>
+<ul id="report"></ul>
+</div>
+
+<!-- ========== STUDENT ========== -->
+<div id="student" style="display:none">
+<h3>นักเรียน</h3>
+<input id="studentId" placeholder="เลขประจำตัวนักเรียน"><br><br>
+<div id="reader" style="width:300px"></div>
+<p id="studentMsg"></p>
+</div>
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, addDoc, doc, getDoc, setDoc } from
-"https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import {
+  getFirestore, collection, addDoc, doc,
+  getDoc, getDocs, setDoc, query, where
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-/* ---------- Firebase ---------- */
-const firebaseConfig = {
+/* Firebase */
+const app = initializeApp({
   apiKey: "AIzaSyD19ffZKxxXfWj9sseK66LCCVEWqGNqPPI",
   authDomain: "appsk-7f523.firebaseapp.com",
   projectId: "appsk-7f523"
-};
-
-const app = initializeApp(firebaseConfig);
+});
 const db = getFirestore(app);
 
-/* ---------- ระบบ ---------- */
-const teacherId = "teacher001";
+let currentTeacher = null;
+let loginRole = null;
 
-/* ---------- UI ---------- */
-window.show = (id) => {
-  ["teacher","student","admin"].forEach(d =>
-    document.getElementById(d).style.display = "none"
-  );
-  document.getElementById(id).style.display = "block";
+/* UI */
+window.show = id => {
+  ["login","admin","teacher","student"].forEach(d =>
+    document.getElementById(d).style.display="none");
+  document.getElementById(id).style.display="block";
 };
 
-/* ---------- ครูสร้าง QR ---------- */
-window.createQR = async (status) => {
-  const subjectId = subject.value;
-  const expireAt = new Date(Date.now() + 5 * 60000);
+window.showLogin = role => {
+  loginRole = role;
+  show("login");
+  loginTitle.innerText = role === "admin" ? "Admin Login" : "ครู Login";
+  loginUser.style.display = role === "teacher" ? "block" : "none";
+};
 
-  const docRef = await addDoc(collection(db, "qr_sessions"), {
-    teacherId,
-    subjectId,
-    status,
-    expireAt,
-    active: true
+/* LOGIN */
+window.login = async () => {
+  if(loginRole==="admin"){
+    const snap = await getDoc(doc(db,"config","admin"));
+    if(loginPass.value === snap.data().password){
+      show("admin");
+    } else loginMsg.innerText="รหัสผิด";
+  }
+
+  if(loginRole==="teacher"){
+    const q = query(collection(db,"teachers"),
+      where("name","==",loginUser.value));
+    const snap = await getDocs(q);
+    if(snap.empty) return loginMsg.innerText="ไม่พบครู";
+
+    const t = snap.docs[0].data();
+    if(t.password === loginPass.value && t.active){
+      currentTeacher = snap.docs[0].id;
+      show("teacher");
+      loadSubjects();
+    } else loginMsg.innerText="รหัสผิด";
+  }
+};
+
+/* ADMIN */
+window.changeAdminPass = async ()=>{
+  await setDoc(doc(db,"config","admin"),
+    {password:newAdminPass.value});
+  adminMsg.innerText="เปลี่ยนรหัสแล้ว";
+};
+
+window.addTeacher = async ()=>{
+  await addDoc(collection(db,"teachers"),{
+    name:teacherName.value,
+    password:teacherPass.value,
+    active:true
   });
-
-  qrResult.innerText =
-    "QR SESSION ID\n\n" + docRef.id;
+  adminMsg.innerText="เพิ่มครูแล้ว";
 };
 
-/* ---------- นักเรียนสแกน ---------- */
-const qr = new Html5Qrcode("reader");
+window.addSubject = async ()=>{
+  await addDoc(collection(db,"subjects"),{
+    name:subjectName.value,
+    active:true
+  });
+  adminMsg.innerText="เพิ่มวิชาแล้ว";
+};
 
-show("student");
+window.openSystem = async ()=>{
+  await setDoc(doc(db,"config","system"),{active:true});
+};
+
+window.closeSystem = async ()=>{
+  await setDoc(doc(db,"config","system"),{active:false});
+};
+
+/* TEACHER */
+async function loadSubjects(){
+  subjectSelect.innerHTML="";
+  const snap = await getDocs(collection(db,"subjects"));
+  snap.forEach(d=>{
+    if(d.data().active){
+      const o=document.createElement("option");
+      o.value=d.id;
+      o.textContent=d.data().name;
+      subjectSelect.appendChild(o);
+    }
+  });
+}
+
+window.createQR = async status=>{
+  const expireAt=new Date(Date.now()+5*60000);
+  const ref=await addDoc(collection(db,"qr_sessions"),{
+    teacherId:currentTeacher,
+    subjectId:subjectSelect.value,
+    status,
+    expireAt
+  });
+  qrResult.innerText=ref.id;
+};
+
+window.loadReport = async ()=>{
+  report.innerHTML="";
+  const q=query(collection(db,"attendance"),
+    where("subjectId","==",subjectSelect.value));
+  const snap=await getDocs(q);
+  snap.forEach(d=>{
+    const li=document.createElement("li");
+    li.textContent=d.data().studentId+" - "+d.data().status;
+    report.appendChild(li);
+  });
+};
+
+/* STUDENT */
+const qr=new Html5Qrcode("reader");
 qr.start(
-  { facingMode: "environment" },
-  { fps: 10, qrbox: 250 },
-  async (sessionId) => {
-    const sid = studentId.value;
-    if (!sid) {
-      alert("กรอกรหัสนักเรียน");
-      return;
-    }
+  {facingMode:"environment"},
+  {fps:10,qrbox:250},
+  async id=>{
+    if(!studentId.value) return alert("ใส่รหัสนักเรียน");
+    const snap=await getDoc(doc(db,"qr_sessions",id));
+    if(!snap.exists()) return alert("QR ผิด");
+    if(new Date()>snap.data().expireAt.toDate())
+      return alert("หมดอายุ");
 
-    const ref = doc(db, "qr_sessions", sessionId);
-    const snap = await getDoc(ref);
-
-    if (!snap.exists()) {
-      alert("QR ไม่ถูกต้อง");
-      return;
-    }
-
-    const data = snap.data();
-    if (new Date() > data.expireAt.toDate()) {
-      alert("QR หมดอายุ");
-      return;
-    }
-
-    await addDoc(collection(db, "attendance"), {
-      studentId: sid,
-      subjectId: data.subjectId,
-      status: data.status,
-      time: new Date()
+    await addDoc(collection(db,"attendance"),{
+      studentId:studentId.value,
+      subjectId:snap.data().subjectId,
+      status:snap.data().status,
+      time:new Date()
     });
-
-    studentResult.innerText =
-      "เช็กชื่อสำเร็จ (" + data.status + ")";
+    studentMsg.innerText="เช็กชื่อแล้ว";
     qr.stop();
   }
 );
-
-/* ---------- Admin ---------- */
-window.openSystem = async () => {
-  await setDoc(doc(db, "config", "system"), { active: true });
-  alert("เปิดระบบแล้ว");
-};
-
-window.closeSystem = async () => {
-  await setDoc(doc(db, "config", "system"), { active: false });
-  alert("ปิดระบบแล้ว");
-};
 </script>
-
 </body>
 </html>
